@@ -45,7 +45,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USERNAME: postgres
-      DB_PASSWORD: root123
+      DB_PASSWORD: password
       DB_DATABASE: vybe_cabs
       REDIS_HOST: redis
       REDIS_PORT: 6379
