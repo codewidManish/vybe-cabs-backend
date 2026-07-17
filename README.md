@@ -1,25 +1,24 @@
-# Vybe Cabs Backend 🚕
+Vybe Cabs Backend 
 
-A production-grade, ride-hailing backend (Uber/Ola/Rapido-style) built with **NestJS**, **PostgreSQL (TypeORM)**, and **Redis** — featuring geo-based nearest-driver search, WebSocket-simulated notifications, and a fully concurrency-safe ride-assignment engine backed by Redis distributed locks and atomic operations.
+Hey! This is a ride-hailing backend project (like Uber/Ola/Rapido) that I build using NestJS, PostgreSQL (TypeORM), and Redis. It has geo based nearest-driver search, WebSocket notifications (simulated), and the most important part - a concurrency safe ride assignment system using Redis distributed locks so no two drivers get assigned to the same ride.
 
----
 
-## 1. Project Overview
+1. Project Overview
 
-Vybe Cabs models the core matching engine of a ride-hailing platform:
+Basically Vybe Cabs is the core matching engine of a ride-hailing app:
 
-- Riders request a ride → nearest available drivers are found via **Redis GEO** and notified.
-- Multiple drivers may try to accept simultaneously → the system guarantees **exactly one** assignment, with zero race conditions, using a **Redis distributed lock** + **atomic NX write**.
-- If nobody accepts within 15 seconds, the ride **times out and retries** with the next-nearest batch.
-- Full audit trail of every notification/accept/reject is persisted for RCA.
 
-See [`architecture.md`](./architecture.md) for the full flow diagram and concurrency design rationale.
+Rider requests a ride → we find nearest available drivers using Redis GEO and notify them.
+If multiple drivers try to accept the same ride at the same time → only one should get it, no race conditions. This is done using Redis distributed lock + atomic NX write.
+If no driver accepts within 15 seconds, ride times out and retrys with next nearest batch of drivers.
+Every notification/accept/reject gets logged so we have a full audit trail for RCA (root cause analysis).
 
----
 
-## 2. Folder Structure
+Check architecture.md for the full diagram and how the concurrency thing works in detail.
 
-```
+
+2. Folder Structure
+
 vybe-cabs-backend/
 ├── src/
 │   ├── modules/
@@ -41,29 +40,24 @@ vybe-cabs-backend/
 ├── Vybe.postman_collection.json
 ├── architecture.md
 └── .env
-```
 
----
 
-## 3. Installation
+3. Installation
 
-```bash
-git clone <your-repo-url> vybe-cabs-backend
+bashgit clone <your-repo-url> vybe-cabs-backend
 cd vybe-cabs-backend
 npm install
-```
 
-## 4. Environment Variables
+4. Environment Variables
 
-Copy `.env.example` to `.env` (already provided as `.env` for local dev):
+Copy .env.example to .env (already added as .env for local dev, so u don't have to do anything extra for now):
 
-```env
-PORT=3000
+envPORT=3000
 
 DB_HOST=localhost
 DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=root123
+DB_USERNAME=
+DB_PASSWORD=
 DB_DATABASE=vybe_cabs
 
 REDIS_HOST=localhost
@@ -72,153 +66,132 @@ REDIS_PORT=6379
 RIDE_ACCEPT_TIMEOUT_SECONDS=15
 NEAREST_DRIVER_SEARCH_RADIUS_KM=5
 NEAREST_DRIVER_BATCH_SIZE=5
-```
 
-## 5. Database Setup
+5. Database Setup
 
-Requires PostgreSQL running locally (or via Docker, see below).
+You need PostgreSQL running locally (or use Docker, mentioned below).
 
-```bash
-# Create the database (if not using Docker)
+bash# Create the database (skip this if you're using Docker)
 createdb -U postgres vybe_cabs
-```
 
-`synchronize: true` is enabled in `src/config/typeorm.config.ts`, so tables (`drivers`, `rides`, `ride_assignment_logs`) are auto-created on first boot. No manual migration needed for local dev.
+synchronize: true is turned on in src/config/typeorm.config.ts, so all tables (drivers, rides, ride_assignment_logs) get auto created when app starts first time. No need to run migrations manually for local dev.
 
-## 6. Redis Setup
+6. Redis Setup
 
-Requires Redis running locally (or via Docker):
+Need Redis running locally too (or Docker):
 
-```bash
-redis-server
-```
+bashredis-server
 
-## 7. Run
+7. Run
 
-```bash
-# Development (watch mode)
+bash# Development (watch mode)
 npm run start:dev
 
 # Production build
 npm run build
 npm run start:prod
-```
 
-App runs at `http://localhost:3000`.
-Swagger docs: `http://localhost:3000/api/docs`
+App runs on http://localhost:3000.
+Swagger docs: http://localhost:3000/api/docs
 
-## 8. Docker
+8. Docker
 
-Spin up Postgres + Redis + the app together:
+If you wanna run Postgres + Redis + the app all together:
 
-```bash
-docker compose up --build
-```
+bashdocker compose up --build
 
-This starts:
-- `postgres` on `5432`
-- `redis` on `6379`
-- `app` (NestJS) on `3000`
+This will start:
 
-## 9. API List
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/drivers` | Register a driver |
-| PATCH | `/drivers/location` | Update driver's live GPS location |
-| GET | `/drivers` | List all drivers |
-| GET | `/drivers/:id` | Get a driver |
-| POST | `/rides` | Request a ride (kicks off search + notify) |
-| GET | `/rides` | List all rides |
-| GET | `/rides/:id` | Get a ride |
-| POST | `/rides/:id/accept` | Driver accepts a ride (concurrency-safe) |
-| PATCH | `/rides/:id/complete` | Mark ride completed, free driver |
+postgres on 5432
+redis on 6379
+app (NestJS) on 3000
 
-Full request/response schemas are in Swagger (`/api/docs`).
 
-## 10. Postman
+9. API List
 
-Import [`Vybe.postman_collection.json`](./Vybe.postman_collection.json) into Postman. It includes a `baseUrl` variable (defaults to `http://localhost:3000`) plus `driverId`/`rideId` variables you can populate from earlier responses.
+MethodEndpointDescriptionPOST/driversRegister a driverPATCH/drivers/locationUpdate driver's live GPS locationGET/driversList all driversGET/drivers/:idGet a driverPOST/ridesRequest a ride (kicks off search + notify)GET/ridesList all ridesGET/rides/:idGet a ridePOST/rides/:id/acceptDriver accepts a ride (concurrency-safe)PATCH/rides/:id/completeMark ride completed, free driver
 
-## 11. Concurrency Strategy
+Full request/response schema's are in Swagger (/api/docs).
 
-See [`architecture.md`](./architecture.md#concurrency-model-the-critical-path) for full detail. Summary:
+10. Postman
 
-1. **Redis distributed lock** (`SET key NX PX 5000`) scoped per ride — only one caller proceeds per ride at a time; others get `409 Conflict` immediately.
-2. **Atomic NX assignment key** (`ride:assignment:{rideId}`) written inside the lock — the actual single-writer guarantee, safe even without the lock.
-3. **Idempotency** — the same driver re-accepting is detected and short-circuited to a success instead of an error.
-4. **Late acceptance rejection** — a driver may only accept while they belong to the ride's *current* notification wave (`RideService.activeWaveDrivers`). The instant a wave's 15s window expires, its drivers are evicted from that set (see `handleTimeout`), so any accept arriving after that point is rejected with `410 Gone`, even if no new wave has started yet.
-5. **Safe lock release** — a Lua script checks token ownership before deleting, so a slow caller can never release a lock it no longer owns.
+Import Vybe.postman_collection.json into Postman. It has a baseUrl variable (default http://localhost:3000) plus driverId/rideId variables that you can fill from earlier responses.
 
-## 12. Redis GEO Explanation
+11. Concurrency Strategy
 
-- `GEOADD drivers:geo <lon> <lat> <driverId>` stores/updates every driver's live position in a single sorted-set-backed geo index.
-- `GEOSEARCH drivers:geo FROMLONLAT <lon> <lat> BYRADIUS <km> ASC COUNT <n> WITHDIST` returns the nearest drivers to a pickup point, sorted by distance, in O(log(N)+M) — far faster than a Postgres haversine query at scale.
-- Availability is tracked in a parallel Redis Set (`drivers:available`) so unavailable drivers are filtered out of search results without needing to remove/re-add them from the GEO index (removal would lose their location on the next request).
+Full detail is in architecture.md. Short version:
 
-## 13. Distributed Lock Explanation
 
-Implemented in `RedisService.acquireLock` / `releaseLock` using the standard single-node lock pattern:
+Redis distributed lock (SET key NX PX 5000) per ride — only one caller can proceed at a time for a ride, everyone else gets 409 Conflict immediately.
+Atomic NX assignment key (ride:assignment:{rideId}) written inside the lock — this is the actual single-writer guarantee, works even without the lock.
+Idempotency — if the same driver clicks accept multiple times, it just returns success instead of throwing error.
+Late acceptance rejection — a driver can only accept while they're part of the ride's current notification wave (RideService.activeWaveDrivers). As soon as a wave's 15s window is up, its drivers get removed from that set (see handleTimeout), so any accept coming after that gets rejected with 410 Gone, even if a new wave hasn't started yet.
+Safe lock release — a Lua script checks the token owner before deleting the lock, so a slow caller can never accidentally delete someone else's lock.
 
-```
+
+12. Redis GEO Explanation
+
+
+GEOADD drivers:geo <lon> <lat> <driverId> saves/updates every driver's live location in a single sorted-set based geo index.
+GEOSEARCH drivers:geo FROMLONLAT <lon> <lat> BYRADIUS <km> ASC COUNT <n> WITHDIST gives back nearest drivers to a pickup point, sorted by distance, in O(log(N)+M) time — way faster than doing a haversine query in Postgres at scale.
+Availability is tracked separately in a Redis Set (drivers:available) so unavailable drivers get filtered out of search without needing to remove/re-add them from the GEO index (removing would loose their location for next time).
+
+
+13. Distributed Lock Explanation
+
+This is implemented in RedisService.acquireLock / releaseLock using the standard single node lock pattern:
+
 SET lock:ride:{rideId} <uuid-token> NX PX 5000
-```
 
-- `NX` → only succeeds if no lock currently exists (atomic test-and-set).
-- `PX 5000` → auto-expires after 5s, so a crashed process can never deadlock the ride forever.
-- Release uses a Lua script (`GET` then conditional `DEL`) to guarantee the caller only deletes a lock it still owns — otherwise a slow request could delete a lock acquired by a different, later request.
 
-## 14. Timeout Flow
+NX → only succeeds if lock doesn't already exist (atomic test-and-set).
+PX 5000 → auto expires after 5s, so if a process crashes it can't deadlock the ride forever.
+Release uses a Lua script (GET then conditional DEL) so the caller only deletes a lock it still owns — otherwise a slow request could accidently delete a lock that some other, later request acquired.
 
-`RideService.armTimeout` schedules a 15s `setTimeout` per ride after each notification wave. If it fires before an accept succeeds, `handleTimeout` runs: audit logs are updated, ride status flips to `TIMEOUT`, and the timeout is cleared as soon as any accept succeeds (`clearTimeoutFor`).
 
-## 15. Retry Flow
+14. Timeout Flow
 
-On timeout, `searchAndNotify` re-runs automatically, excluding every driver already notified for this ride (tracked in an in-memory `Set` per ride), so the next wave reaches genuinely new nearest candidates.
+RideService.armTimeout schedules a 15s setTimeout per ride after every notification wave. If it fires before someone accepts, handleTimeout runs — audit logs get updated, ride status goes to TIMEOUT, and timeout gets cleared as soon as any accept succeeds (clearTimeoutFor).
 
-## 16. Testing
+15. Retry Flow
 
-```bash
-npm run test          # unit tests (Jest) — includes concurrency race test with mocked Redis
+When a timeout happens, searchAndNotify runs again automatically, excluding every driver already notified for this ride (we keep track in an in-memory Set per ride), so next wave reaches genuinely new nearest drivers.
+
+16. Testing
+
+bashnpm run test          # unit tests (Jest) — includes concurrency race test with mocked Redis
 npm run test:cov       # with coverage
-```
 
-`src/modules/ride/ride.service.spec.ts` proves, with mocked but semantically-accurate Redis behavior, that two simultaneous `acceptRide()` calls yield exactly one success and one `GoneException`, and that repeat-accepts from the same driver are idempotent.
+src/modules/ride/ride.service.spec.ts proves (with mocked but realistic Redis behaviour) that two simultaneous acceptRide() calls give exactly one success and one GoneException, and repeat accepts from same driver are idempotent.
 
-### Live end-to-end concurrency simulation
+Live end-to-end concurrency simulation
 
-With the app running (`npm run start:dev`, plus Postgres/Redis up):
+With the app running (npm run start:dev, plus Postgres/Redis up):
 
-```bash
-npm run simulate:concurrency
-```
+bashnpm run simulate:concurrency
 
-This registers **100 real drivers** at the exact pickup coordinates (so whichever subset Redis genuinely notifies is guaranteed to come from this pool), creates a ride, then fires **100 parallel** `POST /rides/:id/accept` calls — one per driver — against the real HTTP server, and prints:
+This registers 100 real drivers at the exact pickup coordinates (so whichever subset Redis actually notifies is guranteed to come from this pool), creates a ride, then fires 100 parallel POST /rides/:id/accept calls - one per driver - against the real HTTP server, and prints:
 
-```
 Successful Driver: <uuid>
 Rejected Drivers: 99
 Execution Time: <ms>
-```
 
-Exactly one driver wins the race; the rest are rejected either by the lock/atomic-assignment check (drivers who *were* notified but lost) or by the late-acceptance check (drivers who were never part of the notified wave — realistic with the default `NEAREST_DRIVER_BATCH_SIZE=5`). To watch all 100 genuinely notified in one wave, start the server with `NEAREST_DRIVER_BATCH_SIZE=100`.
+Only one driver wins the race, rest get rejected either by the lock/atomic-assignment check (drivers who were notified but lost) or by the late-acceptance check (drivers who were never part of the notified wave - this is realistic with default NEAREST_DRIVER_BATCH_SIZE=5). If you want to see all 100 actually get notified in one wave, start server with NEAREST_DRIVER_BATCH_SIZE=100.
 
-## 17. Performance
+17. Performance
 
-- Redis GEOSEARCH and lock operations are O(log N) / O(1) — nearest-driver search and assignment stay fast even with tens of thousands of active drivers.
-- The distributed lock's 5s TTL bounds worst-case lock contention; `409` responses are cheap fail-fast rejections rather than blocking waits, so 100 concurrent accepts resolve in low tens of milliseconds against a local Redis instance.
 
-## 18. Future Improvements
+Redis GEOSEARCH and lock operations are O(log N) / O(1) so nearest-driver search and assignment stays fast even with tens of thousands of active drivers.
+The distributed lock's 5s TTL limits worst case lock contention; 409 responses are cheap fail-fast rejections instead of blocking waits, so 100 concurrent accepts resolve in low tens of milliseconds against a local Redis.
 
-- Replace single-node Redis lock with full **Redlock** (multi-node quorum) for HA deployments.
-- Move `synchronize: true` to versioned TypeORM migrations before any real production rollout.
-- Expand search radius progressively when a wave finds zero candidates instead of a static radius.
-- Add authentication/authorization (JWT + role guards) — explicitly out of scope for this assignment.
-- Persist WebSocket delivery receipts to know definitively whether a driver's device received the push.
-- Add integration tests against real Testcontainers-managed Postgres/Redis instances.
 
----
+18. Future Improvements
 
-## License
 
-MIT
+Replace single node Redis lock with proper Redlock (multi-node quorum) for HA deployments.
+Move synchronize: true to versioned TypeORM migrations before any real production rollout.
+Expand search radius progressively when a wave finds zero candidates, instead of a static radius.
+Add authentication/authorization (JWT + role guards) — was explicitly out of scope for this assignment.
+Persist WebSocket delivery receipts so we definitely know if a driver's device recieved the push.
+Add integration tests against real Testcontainers managed Postgres/Redis instances.
