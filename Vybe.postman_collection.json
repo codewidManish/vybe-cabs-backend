@@ -1,0 +1,81 @@
+{
+  "info": {
+    "name": "Vybe Cabs Backend",
+    "description": "API collection for the Vybe Cabs ride-hailing backend (NestJS + Postgres + Redis GEO).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "driverId", "value": "" },
+    { "key": "rideId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Create Driver",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/drivers",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Ramesh Kumar\",\n  \"latitude\": 28.6139,\n  \"longitude\": 77.209\n}"
+        }
+      }
+    },
+    {
+      "name": "Update Driver Location",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/drivers/location",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"driverId\": \"{{driverId}}\",\n  \"latitude\": 28.6145,\n  \"longitude\": 77.2101\n}"
+        }
+      }
+    },
+    {
+      "name": "List Drivers",
+      "request": { "method": "GET", "url": "{{baseUrl}}/drivers" }
+    },
+    {
+      "name": "Create Ride",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/rides",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"riderName\": \"Anjali Sharma\",\n  \"pickupLatitude\": 28.6129,\n  \"pickupLongitude\": 77.2295\n}"
+        }
+      }
+    },
+    {
+      "name": "List Rides",
+      "request": { "method": "GET", "url": "{{baseUrl}}/rides" }
+    },
+    {
+      "name": "Get Ride By Id",
+      "request": { "method": "GET", "url": "{{baseUrl}}/rides/{{rideId}}" }
+    },
+    {
+      "name": "Accept Ride",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/rides/{{rideId}}/accept",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"driverId\": \"{{driverId}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Complete Ride",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/rides/{{rideId}}/complete"
+      }
+    }
+  ]
+}
